@@ -1,0 +1,20 @@
+name = "bet-engine-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 binding (completezi database_id după ce creezi DB)
+[[d1_databases]]
+binding = "DB"
+database_name = "bet_engine"
+database_id = "b5917a8f-31b3-437e-abaa-a910084d550d"
+
+[vars]
+REGION = "eu"
+SPORTS = "tennis,soccer"
+EV_MIN = "0.03"
+HOURS = "4"
+
+# Cron: scan la 10 min, settle la 5 min
+[triggers]
+crons = ["*/10 * * * *", "*/5 * * * *"]

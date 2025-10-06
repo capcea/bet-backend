@@ -1,9 +1,3 @@
-import Database from "better-sqlite3";
-
-const db = new Database("bets.db");
-db.pragma("journal_mode = WAL");
-
-db.exec(`
 CREATE TABLE IF NOT EXISTS picks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   sport_key TEXT NOT NULL,
@@ -21,12 +15,8 @@ CREATE TABLE IF NOT EXISTS picks (
   score_home INTEGER,
   score_away INTEGER,
   sharp_sources TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
+  created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   resolved_at TEXT
 );
-
 CREATE INDEX IF NOT EXISTS idx_event ON picks(event_id);
 CREATE INDEX IF NOT EXISTS idx_status ON picks(status);
-`);
-
-export default db;
