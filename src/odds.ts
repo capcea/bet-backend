@@ -51,13 +51,20 @@ async function apiGet(
 
 export async function listSports(env: Env) {
   const all = await apiGet("/v4/sports/", env, { all: "true" });
+
+  // include doar sporturi de meci (nu futures/outrights/specials)
+  const deny = /(winner|outright|outrights|futures?|specials?)/i;
+
   return [
     ...new Set(
       all
-        .map((s: any) => s.key)
+        .map((s: any) => s.key as string)
+        .filter(Boolean)
+        // doar tenis & fotbal, evenimente de meci
         .filter(
           (k: string) =>
-            k && (k.startsWith("tennis_") || k.startsWith("soccer_"))
+            (k.startsWith("tennis_") || k.startsWith("soccer_")) &&
+            !deny.test(k)
         )
     ),
   ];
