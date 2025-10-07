@@ -72,8 +72,11 @@ export async function scanOnce(env: Env): Promise<PickRow[]> {
     const sports = await listSports(env);
     const rows: PickRow[] = [];
 
-    const commenceFrom = new Date().toISOString();
-    const commenceTo = new Date(Date.now() + hours * 3600_000).toISOString();
+    const isoNoMs = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+    const now = new Date();
+    const commenceFrom = isoNoMs(now);
+    const commenceTo = isoNoMs(new Date(now.getTime() + hours * 3600_000));
 
     for (const sport_key of sports) {
       const events = await apiGet(`/v4/sports/${sport_key}/odds`, env, {
