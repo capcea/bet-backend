@@ -7,18 +7,15 @@ import { scanOnce, settlePending } from "./odds";
 const app = new Hono<{ Bindings: Env }>();
 app.use("*", cors({ origin: "*" }));
 
+// Global error handler – orice excepție devine JSON clar
+app.onError((err, c) =>
+  c.json({ ok: false, error: err?.message || String(err) }, 500)
+);
+
+// Healthcheck simplu
 app.get("/api/health", (c) => c.text("ok"));
 
-app.post("/api/scan", async (c) => {
-  const rows = await scanOnce(c.env);
-  let inserted = 0;
-  for (const r of rows) {
-    const id = await upsertPick(c.env, r as PickRow);
-    if (id) inserted++;
-  }
-  return c.json({ ok: true, inserted });
-});
-
+// Diagnostic: verifică D1 + The Odds API (fără să expună cheia)
 app.get("/api/diag", async (c) => {
   const hasKey = Boolean(c.env.ODDS_API_KEY && c.env.ODDS_API_KEY.length > 10);
   try {
@@ -31,13 +28,13 @@ app.get("/api/diag", async (c) => {
       "https://api.the-odds-api.com/v4/sports/?all=true&apiKey=" +
         c.env.ODDS_API_KEY
     );
-    const ok = r.ok,
-      status = r.status;
-    const text = ok ? "ok" : await r.text();
+    const body = await (r.ok
+      ? Promise.resolve(null)
+      : r.text().catch(() => "<no-body>"));
     return c.json({
       ok: true,
       hasKey,
-      odds_api: { ok, status, text: ok ? undefined : text },
+      odds_api: { ok: r.ok, status: r.status, body },
     });
   } catch (e: any) {
     return c.json(
@@ -47,6 +44,22 @@ app.get("/api/diag", async (c) => {
   }
 });
 
+// Trigger manual de scan (insertă picks cu EV≥prag)
+app.post("/api/scan", async (c) => {
+  try {
+    const rows = await scanOnce(c.env);
+    let inserted = 0;
+    for (const r of rows) {
+      await upsertPick(c.env, r as PickRow);
+      inserted++;
+    }
+    return c.json({ ok: true, inserted });
+  } catch (e: any) {
+    return c.json({ ok: false, error: e?.message || "scan failed" }, 500);
+  }
+});
+
+// Upcoming picks
 app.get("/api/upcoming", async (c) => {
   const rows = await c.env.DB.prepare(
     `
@@ -59,6 +72,7 @@ app.get("/api/upcoming", async (c) => {
   return c.json(rows.results || []);
 });
 
+// Logs (all-time)
 app.get("/api/logs", async (c) => {
   const limit = Number(c.req.query("limit") || "500");
   const rows = await c.env.DB.prepare(
@@ -74,6 +88,7 @@ app.get("/api/logs", async (c) => {
   return c.json(rows.results || []);
 });
 
+// Stats agregate
 app.get("/api/stats", async (c) => {
   const t = await c.env.DB.prepare(
     `
@@ -89,6 +104,7 @@ app.get("/api/stats", async (c) => {
     won: 0,
     avg_soft_odds: null,
   }) as any;
+
   const p = await c.env.DB.prepare(
     `
     SELECT COUNT(*) AS n FROM picks WHERE status IN ('won','lost','push')
@@ -96,6 +112,7 @@ app.get("/api/stats", async (c) => {
   ).all();
   const played = (p.results?.[0]?.n || 0) as number;
   const success = played ? (Number(totals.won || 0) / played) * 100 : 0;
+
   return c.json({
     total_picks: Number(totals.total || 0),
     played,
@@ -109,6 +126,7 @@ app.get("/api/stats", async (c) => {
 
 export default {
   fetch: app.fetch,
+  // Cron triggers (setate în wrangler.toml): scan & settle
   scheduled: async (_evt: ScheduledEvent, env: Env, ctx: ExecutionContext) => {
     ctx.waitUntil(
       (async () => {
