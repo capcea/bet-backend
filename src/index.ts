@@ -19,6 +19,34 @@ app.post("/api/scan", async (c) => {
   return c.json({ ok: true, inserted });
 });
 
+app.get("/api/diag", async (c) => {
+  const hasKey = Boolean(c.env.ODDS_API_KEY && c.env.ODDS_API_KEY.length > 10);
+  try {
+    await c.env.DB.prepare("SELECT 1").all();
+  } catch (e: any) {
+    return c.json({ ok: false, where: "d1", error: e.message, hasKey }, 500);
+  }
+  try {
+    const r = await fetch(
+      "https://api.the-odds-api.com/v4/sports/?all=true&apiKey=" +
+        c.env.ODDS_API_KEY
+    );
+    const ok = r.ok,
+      status = r.status;
+    const text = ok ? "ok" : await r.text();
+    return c.json({
+      ok: true,
+      hasKey,
+      odds_api: { ok, status, text: ok ? undefined : text },
+    });
+  } catch (e: any) {
+    return c.json(
+      { ok: false, where: "odds_api", error: e.message, hasKey },
+      500
+    );
+  }
+});
+
 app.get("/api/upcoming", async (c) => {
   const rows = await c.env.DB.prepare(
     `
