@@ -52,22 +52,31 @@ async function apiGet(
 export async function listSports(env: Env) {
   const all = await apiGet("/v4/sports/", env, { all: "true" });
 
-  // include doar sporturi de meci (nu futures/outrights/specials)
+  // whitelist ligile mari (match odds disponibile)
+  const WL = new Set<string>([
+    "tennis_atp",
+    "tennis_wta",
+    "tennis_challenger",
+    "soccer_epl",
+    "soccer_spain_la_liga",
+    "soccer_germany_bundesliga",
+    "soccer_italy_serie_a",
+    "soccer_france_ligue_one",
+    "soccer_uefa_champs_league",
+    "soccer_uefa_europa_league",
+  ]);
+
   const deny = /(winner|outright|outrights|futures?|specials?)/i;
 
-  return [
-    ...new Set(
-      all
-        .map((s: any) => s.key as string)
-        .filter(Boolean)
-        // doar tenis & fotbal, evenimente de meci
-        .filter(
-          (k: string) =>
-            (k.startsWith("tennis_") || k.startsWith("soccer_")) &&
-            !deny.test(k)
-        )
-    ),
-  ];
+  const keys = all
+    .map((s: any) => s.key as string)
+    .filter(Boolean)
+    .filter((k) => k.startsWith("tennis_") || k.startsWith("soccer_"))
+    .filter((k) => !deny.test(k));
+
+  // ținem doar ce e în whitelist; dacă nu e disponibil, cădem pe primele 8
+  const wl = keys.filter((k) => WL.has(k));
+  return (wl.length ? wl : keys).slice(0, 8);
 }
 
 export async function scanOnce(env: Env): Promise<PickRow[]> {
